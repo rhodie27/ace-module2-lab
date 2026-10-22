@@ -66,26 +66,32 @@ export function getUserProfile () {
         if (!code) {
           throw new Error('Username is null')
         }
-        const singleQuoteRegex = /^'(?:[^'\\]|\\.)*'$/
-        const doubleQuoteRegex = /^"(?:[^"\\]|\\.)*"$/
-        const backtickRegex = /^`(?:[^`\\$]|\\.|\$(?!{))*`$/
-        const numericRegex = /^-?\d+(?:\.\d+)?$/
+        const singleQuoteRegex = /^'(?:(?![#!]\{|#\[)[^'\\\r\n]|\\.)*'$/
+        const doubleQuoteRegex = /^"(?:(?![#!]\{|#\[)[^"\\\r\n]|\\.)*"$/
+        const backtickRegex = /^`(?:(?![#!]\{|#\[)[^`\\$\r\n]|\\.|\$(?!{))*`$/
+        const numericRegex = /^-?\d+(?:\\.\\d+)?$/
         const booleanRegex = /^(?:true|false|null|undefined)$/
         const arithmeticRegex = /^[0-9+\-*/% ()]+$/
 
-        const isSafe = singleQuoteRegex.test(code) ||
+        const isSafe = !/[#!]\{|#\[/.test(code) && (
+          singleQuoteRegex.test(code) ||
           doubleQuoteRegex.test(code) ||
           backtickRegex.test(code) ||
           numericRegex.test(code) ||
           booleanRegex.test(code) ||
           arithmeticRegex.test(code)
+        )
 
         if (!isSafe) {
           throw new Error('Unsafe code execution blocked')
         }
-        username = eval(code) // eslint-disable-line no-eval
+        const evaluated = eval(code) // eslint-disable-line no-eval
+        if (typeof evaluated === 'string' && (/[#!]\{|#\[/.test(evaluated) || /[\r\n\u2028\u2029\v\f]/.test(evaluated))) {
+          throw new Error('Unsafe code execution blocked')
+        }
+        username = evaluated
       } catch (err) {
-        username = sanitizePug(username)
+        username = sanitizePug(user.username)
       }
     } else if (username) {
       username = sanitizePug(username)
