@@ -29,8 +29,8 @@ async function extractZipBuffer (buffer: Buffer) {
   for (const entry of directory.files) {
     const fileName = entry.path
     const absolutePath = path.resolve('uploads/complaints/' + fileName)
-    challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-    if (absolutePath.includes(path.resolve('.'))) {
+    if (absolutePath.startsWith(path.resolve('uploads/complaints/') + path.sep)) {
+      challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
       await pipeline(entry.stream(), fs.createWriteStream('uploads/complaints/' + fileName))
     }
   }
@@ -73,7 +73,13 @@ async function handleXmlUpload ({ file }: Request, res: Response, next: NextFunc
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
       try {
+        if (/<\s*!\s*(?:DOCTYPE|ENTITY)/i.test(data.replace(/\0/g, ''))) {
+          throw new Error('XML contains forbidden entity or DTD declarations')
+        }
         const xmlString = await parseXmlString(data)
+        if (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) {
+          throw new Error('XML contains forbidden content')
+        }
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
         next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: ' + utils.trunc(xmlString, 400) + ' (' + file.originalname + ')'))
