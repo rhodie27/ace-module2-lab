@@ -21,6 +21,14 @@ function favicon () {
   return utils.extractFilename(config.get('application.favicon'))
 }
 
+function sanitizePug (str?: string) {
+  if (!str) return str
+  let clean = str.replace(/[\r\n\u2028\u2029\v\f]+/g, '')
+  clean = clean.replace(/\\*([#!]\{|#\[)/g, (match, p1) => '\\' + p1)
+  clean = clean.replace(/^\\*/, '\\')
+  return clean
+}
+
 export function getUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     let template: string
@@ -63,22 +71,24 @@ export function getUserProfile () {
         const backtickRegex = /^`(?:[^`\\$]|\\.|\$(?!{))*`$/
         const numericRegex = /^-?\d+(?:\.\d+)?$/
         const booleanRegex = /^(?:true|false|null|undefined)$/
+        const arithmeticRegex = /^[0-9+\-*/% ()]+$/
 
         const isSafe = singleQuoteRegex.test(code) ||
           doubleQuoteRegex.test(code) ||
           backtickRegex.test(code) ||
           numericRegex.test(code) ||
-          booleanRegex.test(code)
+          booleanRegex.test(code) ||
+          arithmeticRegex.test(code)
 
         if (!isSafe) {
           throw new Error('Unsafe code execution blocked')
         }
         username = eval(code) // eslint-disable-line no-eval
       } catch (err) {
-        username = '\\' + username
+        username = sanitizePug(username)
       }
-    } else {
-      username = '\\' + username
+    } else if (username) {
+      username = sanitizePug(username)
     }
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
